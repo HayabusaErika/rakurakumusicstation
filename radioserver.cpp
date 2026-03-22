@@ -388,8 +388,8 @@ private:
             char ip_str[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str));
             std::cout << "[Stream] New client: " << ip_str << ":" 
-                      << ntohs(client_addr.sin_port) 
-                      << " (total: " << clients_.size() << " << std::endl;
+          << ntohs(client_addr.sin_port) 
+          << " (total: " << clients_.size() << ")" << std::endl;
         }
     }
     
@@ -428,7 +428,7 @@ private:
             clients_.erase(it);
             epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, nullptr);
             std::cout << "[Stream] Client disconnected: " << fd 
-                      << " (remaining: " << clients_.size() << " << std::endl;
+          << " (remaining: " << clients_.size() << ")" << std::endl;
         }
     }
     
@@ -534,7 +534,7 @@ private:
         }
         
         std::cout << "[Audio] Playing: " << playlist_->at(track_idx) 
-                  << " (" << track_idx + 1 << "/" << playlist_->size() << " << std::endl;
+          << " (" << track_idx + 1 << "/" << playlist_->size() << ")" << std::endl;
         
         // 构建FFmpeg命令
         std::string cmd = "ffmpeg -v quiet -re -i \"" + filename + "\" "
@@ -653,11 +653,11 @@ public:
 
 private:
     void setup_routes() {
-        // 首页
-        CROW_ROUTE(app_, "/")
-        ([this]() {
-            std::stringstream html;
-            html << R"(
+    CROW_ROUTE(app_, "/")
+    ([this]() {
+        std::stringstream html;
+        // 使用 R"rawhtml( 来开始，使用 )rawhtml" 来结束
+        html << R"rawhtml(
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -894,7 +894,7 @@ private:
         <section class="player-section">
             <h2><span class="icon">▶️</span> 当前播放</h2>
             <audio id="player" controls autoplay>
-                <source src="http://localhost:) << Config::STREAM_PORT << R"(" type="audio/mpeg">
+                <source src="http://localhost:)rawhtml" << Config::STREAM_PORT << R"rawhtml(" type="audio/mpeg">
                 您的浏览器不支持音频播放(⁠ʘ⁠ᗩ⁠ʘ⁠’⁠)
             </audio>
             <div class="controls">
@@ -937,7 +937,7 @@ private:
         </div>
         
         <footer>
-            <p>© Rakuraku music station| 服务器运行中 | 端口:  << Config::WEB_PORT << " (Web), " << Config::STREAM_PORT << " (Stream)</p>
+            <p>© Rakuraku music station| 服务器运行中 | 端口: )rawhtml" << Config::WEB_PORT << " (Web), " << Config::STREAM_PORT << R"rawhtml( (Stream)</p>
         </footer>
     </div>
 
@@ -1096,10 +1096,10 @@ private:
     </script>
 </body>
 </html>
-
-            return crow::response(html.str()
-        }
-        
+)rawhtml"; // 结束定界符也要匹配
+        return crow::response(html.str());
+    });
+    
         // API: 播放列表
         CROW_ROUTE(app_, "/api/playlist")
         ([this]() {
@@ -1442,7 +1442,7 @@ int main() {
             return 1;
         }
         
-        // 等待服务器运行
+                // 等待服务器运行
         server.wait_for_shutdown();
         
         g_server_instance = nullptr;
@@ -1454,4 +1454,3 @@ int main() {
     
     std::cout << "[System] 服务器已退出" << std::endl;
     return 0;
-}
