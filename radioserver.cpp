@@ -1214,7 +1214,8 @@ private:
                 int counter = 1;
                 while (fs::exists("./media/" + safe_filename)) {
                     std::string stem = fs::path(filename).stem();
-                    safe_filename = stem + " (" + std::to_string(counter++) + " + ext;
+                    safe_filename = stem + " (" + std::to_string(counter++) + ")" + ext;
+
                 }
                 
                 // 保存文件
@@ -1235,7 +1236,8 @@ private:
                 }
                 
                 std::cout << "[Web] File uploaded: " << safe_filename 
-                          << " (" << part.body.size() / 1024 << " KB << std::endl;
+                          << " (" << part.body.size() / 1024 << " KB)" << std::endl;
+
                 
                 return crow::response(200, "文件上传成功: " + safe_filename);
                 
