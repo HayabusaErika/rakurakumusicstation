@@ -389,7 +389,7 @@ private:
             inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str));
             std::cout << "[Stream] New client: " << ip_str << ":" 
                       << ntohs(client_addr.sin_port) 
-                      << " (total: " << clients_.size() << ")" << std::endl;
+                      << " (total: " << clients_.size() << " << std::endl;
         }
     }
     
@@ -428,7 +428,7 @@ private:
             clients_.erase(it);
             epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, nullptr);
             std::cout << "[Stream] Client disconnected: " << fd 
-                      << " (remaining: " << clients_.size() << ")" << std::endl;
+                      << " (remaining: " << clients_.size() << " << std::endl;
         }
     }
     
@@ -534,7 +534,7 @@ private:
         }
         
         std::cout << "[Audio] Playing: " << playlist_->at(track_idx) 
-                  << " (" << track_idx + 1 << "/" << playlist_->size() << ")" << std::endl;
+                  << " (" << track_idx + 1 << "/" << playlist_->size() << " << std::endl;
         
         // 构建FFmpeg命令
         std::string cmd = "ffmpeg -v quiet -re -i \"" + filename + "\" "
@@ -894,11 +894,11 @@ private:
         <section class="player-section">
             <h2><span class="icon">▶️</span> 当前播放</h2>
             <audio id="player" controls autoplay>
-                <source src="http://localhost:)" << Config::STREAM_PORT << R"(" type="audio/mpeg">
+                <source src="http://localhost:) << Config::STREAM_PORT << R"(" type="audio/mpeg">
                 您的浏览器不支持音频播放(⁠ʘ⁠ᗩ⁠ʘ⁠’⁠)
             </audio>
             <div class="controls">
-                <button onclick="playNext()">
+                <button onclick="playNext(>
                     <span class="icon">⏭️</span> 下一首
                 </button>
                 <div id="currentTrack">正在加载播放列表...</div>
@@ -937,7 +937,7 @@ private:
         </div>
         
         <footer>
-            <p>© Rakuraku music station| 服务器运行中 | 端口: )" << Config::WEB_PORT << " (Web), " << Config::STREAM_PORT << " (Stream)</p>
+            <p>© Rakuraku music station| 服务器运行中 | 端口:  << Config::WEB_PORT << " (Web), " << Config::STREAM_PORT << " (Stream)</p>
         </footer>
     </div>
 
@@ -975,7 +975,7 @@ private:
                     playlist.forEach((track, index) => {
                         const isCurrent = index === currentTrackIndex;
                         html += `
-                            <div class="track ${isCurrent ? 'current' : ''}" onclick="playTrack(${index})">
+                            <div class="track ${isCurrent ? 'current' : ''}" onclick="playTrack(${index}>
                                 <span class="track-number">${index + 1}</span>
                                 ${track}
                                 ${isCurrent ? ' <span style="color: #667eea;">▶️</span>' : ''}
@@ -1096,9 +1096,9 @@ private:
     </script>
 </body>
 </html>
-)";
-            return crow::response(html.str());
-        });
+
+            return crow::response(html.str()
+        }
         
         // API: 播放列表
         CROW_ROUTE(app_, "/api/playlist")
@@ -1214,7 +1214,7 @@ private:
                 int counter = 1;
                 while (fs::exists("./media/" + safe_filename)) {
                     std::string stem = fs::path(filename).stem();
-                    safe_filename = stem + " (" + std::to_string(counter++) + ")" + ext;
+                    safe_filename = stem + " (" + std::to_string(counter++) + " + ext;
                 }
                 
                 // 保存文件
@@ -1235,7 +1235,7 @@ private:
                 }
                 
                 std::cout << "[Web] File uploaded: " << safe_filename 
-                          << " (" << part.body.size() / 1024 << " KB)" << std::endl;
+                          << " (" << part.body.size() / 1024 << " KB << std::endl;
                 
                 return crow::response(200, "文件上传成功: " + safe_filename);
                 
