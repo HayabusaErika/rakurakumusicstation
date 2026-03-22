@@ -22,6 +22,7 @@
 #include <sstream>
 #include <iomanip>
 #include <regex>
+#include <random>
 
 namespace fs = std::filesystem;
 
@@ -466,9 +467,10 @@ private:
 class AudioPlayer {
 public:
     AudioPlayer(BroadcastBuffer* buffer, std::vector<std::string>* playlist, 
-                std::atomic<size_t>* current_track)
-        : buffer_(buffer), playlist_(playlist), current_track_(current_track),
-          running_(false), skip_track_(false) {}
+            std::atomic<size_t>* current_track, std::mutex* playlist_mutex)
+    : buffer_(buffer), playlist_(playlist), current_track_(current_track),
+      playlist_mutex_(playlist_mutex), running_(false), skip_track_(false) {}
+
     
     ~AudioPlayer() {
         stop();
@@ -503,7 +505,8 @@ private:
         while (running_) {
             // 等待播放列表中有音乐
             {
-                std::lock_guard<std::mutex> lock(*playlist_mutex_);
+                std::lock_guard<std::mutex> 
+                lock(playlist_mutex_);
                 if (playlist_->empty()) {
                     std::this_thread::sleep_for(std::chrono::seconds(2));
                     continue;
@@ -519,7 +522,8 @@ private:
         size_t track_idx;
         
         {
-            std::lock_guard<std::mutex> lock(*playlist_mutex_);
+            std::lock_guard<std::mutex> 
+            lock(playlist_mutex_);
             if (playlist_->empty()) return;
             
             track_idx = current_track_->load() % playlist_->size();
@@ -615,10 +619,10 @@ private:
 class WebServer {
 public:
     WebServer(std::vector<std::string>* playlist, std::atomic<size_t>* current_track,
-              StreamServer* stream_server, AudioPlayer* audio_player)
-        : playlist_(playlist), current_track_(current_track),
-          stream_server_(stream_server), audio_player_(audio_player),
-          running_(false) {}
+          StreamServer* stream_server, AudioPlayer* audio_player, std::mutex* playlist_mutex)
+    : playlist_(playlist), current_track_(current_track),
+      stream_server_(stream_server), audio_player_(audio_player),
+      playlist_mutex_(playlist_mutex), running_(false) {}
     
     ~WebServer() {
         stop();
@@ -654,16 +658,15 @@ public:
 private:
     void setup_routes() {
     CROW_ROUTE(app_, "/")
-    ([this]() {
-        std::stringstream html;
-        // 使用 R"rawhtml( 来开始，使用 )rawhtml" 来结束
-        html << R"rawhtml(
+([this]() {
+    std::stringstream html;
+    html << R"rawhtml(
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rakuraku music station </title>
+    <title>Rakuraku Music Station</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -894,13 +897,10 @@ private:
         <section class="player-section">
             <h2><span class="icon">▶️</span> 当前播放</h2>
             <audio id="player" controls autoplay>
-                <source src="http://localhost:)rawhtml" << Config::STREAM_PORT << R"rawhtml(" type="audio/mpeg">
-                您的浏览器不支持音频播放(⁠ʘ⁠ᗩ⁠ʘ⁠’⁠)
-            </audio>
+    <source src="http://localhost:2241" type="audio/mpeg">
+</audio>
             <div class="controls">
-                <button onclick="playNext(>
-                    <span class="icon">⏭️</span> 下一首
-                </button>
+                <button onclick="playNext()">⏭️ 下一首</button>
                 <div id="currentTrack">正在加载播放列表...</div>
             </div>
         </section>
@@ -914,36 +914,27 @@ private:
             <h2><span class="icon">📤</span> 上传音乐</h2>
             <form id="uploadForm">
                 <input type="file" id="fileInput" name="file" accept=".mp3,.wav,.flac,.ogg,.m4a,.aac" required>
-                <button type="submit">
-                    <span class="icon">⬆️</span> 上传
-                </button>
+                <button type="submit">⬆️ 上传</button>
             </form>
             <div id="uploadStatus"></div>
         </section>
         
         <div class="stats">
-            <div class="stat-box">
-                <div class="stat-label">在线听众</div>
-                <div class="stat-value" id="clientCount">0</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-label">总曲目</div>
-                <div class="stat-value" id="totalTracks">0</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-label">当前曲目</div>
-                <div class="stat-value" id="currentIndex">-</div>
-            </div>
+            <div class="stat-box"><div class="stat-label">在线听众</div><div class="stat-value" id="clientCount">0</div></div>
+            <div class="stat-box"><div class="stat-label">总曲目</div><div class="stat-value" id="totalTracks">0</div></div>
+            <div class="stat-box"><div class="stat-label">当前曲目</div><div class="stat-value" id="currentIndex">-</div></div>
         </div>
         
         <footer>
-            <p>© Rakuraku music station| 服务器运行中 | 端口: )rawhtml" << Config::WEB_PORT << " (Web), " << Config::STREAM_PORT << R"rawhtml( (Stream)</p>
+            <p>© Rakuraku music station | 端口: 2240 (Web), 2241 (Stream)</p>
         </footer>
     </div>
 
     <script>
-        let currentTrackIndex = 0;
-        let totalTracks = 0;
+        // 动态注入音频源（修复）
+        document.addEventListener("DOMContentLoaded", () => {
+            document.getElementById("player").src = "http://localhost:2241";
+        });
         
         // 加载播放列表
         async function loadPlaylist() {
@@ -975,7 +966,7 @@ private:
                     playlist.forEach((track, index) => {
                         const isCurrent = index === currentTrackIndex;
                         html += `
-                            <div class="track ${isCurrent ? 'current' : ''}" onclick="playTrack(${index}>
+                            <div class="track ${isCurrent ? 'current' : ''}" onclick="playTrack(${index})>
                                 <span class="track-number">${index + 1}</span>
                                 ${track}
                                 ${isCurrent ? ' <span style="color: #667eea;">▶️</span>' : ''}
@@ -1103,7 +1094,8 @@ private:
         // API: 播放列表
         CROW_ROUTE(app_, "/api/playlist")
         ([this]() {
-            std::lock_guard<std::mutex> lock(playlist_mutex_);
+            std::lock_guard<std::mutex> 
+            lock(playlist_mutex_);
             crow::json::wvalue result;
             result["playlist"] = *playlist_;
             result["current"] = current_track_->load();
@@ -1113,7 +1105,8 @@ private:
         // API: 播放指定曲目
         CROW_ROUTE(app_, "/api/play/<int>")
         ([this](int index) {
-            std::lock_guard<std::mutex> lock(playlist_mutex_);
+            std::lock_guard<std::mutex> 
+            lock(playlist_mutex_);
             if (index >= 0 && index < playlist_->size()) {
                 current_track_->store(index);
                 if (audio_player_) audio_player_->skip_current_track();
@@ -1135,7 +1128,8 @@ private:
             crow::json::wvalue result;
             result["clients"] = stream_server_ ? stream_server_->client_count() : 0;
             {
-                std::lock_guard<std::mutex> lock(playlist_mutex_);
+                std::lock_guard<std::mutex> 
+                lock(playlist_mutex_);
                 result["tracks"] = playlist_->size();
                 result["current"] = current_track_->load();
             }
@@ -1230,7 +1224,8 @@ private:
                 
                 // 添加到播放列表
                 {
-                    std::lock_guard<std::mutex> lock(playlist_mutex_);
+                    std::lock_guard<std::mutex> 
+                    lock(playlist_mutex_);
                     playlist_->push_back(safe_filename);
                     std::sort(playlist_->begin(), playlist_->end());
                 }
@@ -1277,7 +1272,7 @@ private:
     std::atomic<size_t>* current_track_;
     StreamServer* stream_server_;
     AudioPlayer* audio_player_;
-    mutable std::mutex playlist_mutex_;
+    std::mutex* playlist_mutex_;
     
     std::atomic<bool> running_{false};
     std::thread thread_;
@@ -1309,9 +1304,9 @@ public:
         bool success = true;
         
         stream_server_ = std::make_unique<StreamServer>(&buffer_);
-        audio_player_ = std::make_unique<AudioPlayer>(&buffer_, &playlist_, &current_track_);
-        web_server_ = std::make_unique<WebServer>(&playlist_, &current_track_, 
-                                                  stream_server_.get(), audio_player_.get());
+        audio_player_ = std::make_unique<AudioPlayer>(&buffer_, &playlist_, &current_track_, &playlist_mutex_);
+        web_server_   = std::make_unique<WebServer>(&playlist_, &current_track_, 
+                                                    stream_server_.get(), audio_player_.get(), &playlist_mutex_);
         
         success &= stream_server_->start();
         success &= audio_player_->start();
@@ -1359,7 +1354,8 @@ public:
 
 private:
     void init_playlist() {
-        std::lock_guard<std::mutex> lock(playlist_mutex_);
+        std::lock_guard<std::mutex>        
+        lock(playlist_mutex_);
         
         // 创建media目录
         fs::create_directories("./media");
