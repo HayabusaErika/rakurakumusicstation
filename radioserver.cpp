@@ -505,7 +505,7 @@ private:
         while (running_) {
             // 等待播放列表中有音乐
             {
-                std::lock_guard<std::mutex> lock(playlist_mutex_);
+                std::lock_guard<std::mutex> lock(*playlist_mutex_);
                 if (playlist_->empty()) {
                     std::this_thread::sleep_for(std::chrono::seconds(2));
                     continue;
@@ -521,7 +521,7 @@ private:
         size_t track_idx;
         
         {
-            std::lock_guard<std::mutex> lock(playlist_mutex_);
+            std::lock_guard<std::mutex> lock(*playlist_mutex_);
             if (playlist_->empty()) return;
             
             track_idx = current_track_->load() % playlist_->size();
@@ -656,7 +656,7 @@ public:
 private:
     void setup_routes() {
     CROW_ROUTE(app_, "/")
-([this](const crow::request&, crow::response& res) {
+([this]() {
     std::string html = R"rawhtml(
 <!DOCTYPE html>
 <html lang="zh-CN">
