@@ -162,29 +162,28 @@ public:
     int fd() const { return fd_; }
     bool is_shutdown() const { return shutdown_; }
 
-    bool send_header() {
-        if (shutdown_ || header_sent_) return true;
-        
-        const std::string header = 
-            "ICY 200 OK\r\n"
-            "icy-name:Stream Radio\r\n"
-            "icy-genre:Music\r\n"
-            "icy-url:http://localhost:" + std::to_string(Config::STREAM_PORT) + "\r\n"
-            "icy-metaint:16384\r\n"
-            "icy-bitrate:192\r\n"
-            "Content-Type:audio/mpeg\r\n"
-            "Connection: close\r\n"
-            "\r\n";
-        
-        ssize_t sent = ::send(fd_, header.c_str(), header.size(), MSG_NOSIGNAL);
-        if (sent > 0) {
-            header_sent_ = true;
-            return true;
-        } else if (sent < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-            return false;
-        }
+    // 在 ClientConnection 类中修改：
+bool send_header() {
+    if (shutdown_ || header_sent_) return true;
+    
+    // 使用标准的 HTTP 1.1 响应头，防止 Chrome 下载
+    const std::string header = 
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: audio/mpeg\r\n"
+        "Connection: keep-alive\r\n"
+        "Cache-Control: no-cache, no-store\r\n"
+        "Pragma: no-cache\r\n"
+        "Server: Rakuraku-Radio\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "\r\n";
+    
+    ssize_t sent = ::send(fd_, header.c_str(), header.size(), MSG_NOSIGNAL);
+    if (sent > 0) {
+        header_sent_ = true;
         return true;
     }
+    return (sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK));
+}
 
     bool send_audio() {
         if (shutdown_) return false;
@@ -1320,23 +1319,23 @@ public:
         return success;
     }
     
-    void stop() {
-        if (!running_.exchange(false)) return;
-        
-        std::cout << "\n[System] 正在停止服务器..." << std::endl;
-        
-        // 按依赖顺序停止组件
-        if (web_server_) web_server_->stop();
-        if (audio_player_) audio_player_->stop();
-        if (stream_server_) stream_server_->stop();
-        
-        // 等待所有组件停止
-        web_server_.reset();
-        audio_player_.reset();
-        stream_server_.reset();
-        
-        std::cout << "[System] 服务器已停止" << std::endl;
-    }
+    // 在 RadioServer 类中：
+  void stop() {
+    if (!running_.exchange(false)) return;
+
+    std::cout << "[System] 正在停止所有服务..." << std::endl;
+    
+    // 1. 先停 Web 服务器（它通常是阻塞主线程的元凶）
+    if (web_server_) web_server_->stop(); 
+    
+    // 2. 停止音频播放（停止 FFmpeg 管道）
+    if (audio_player_) audio_player_->stop();
+    
+    // 3. 停止流服务器（断开所有连接）
+    if (stream_server_) stream_server_->stop();
+    
+    std::cout << "[System] 服务器已停止" <<std::endl;
+   } // 确保这里括号对应
     
     void wait_for_shutdown() {
         while (running_) {
