@@ -15,7 +15,7 @@
 
 ## 🛠️ 技术栈
 
-*   **内核**：C++17 标准
+*   **内核**：C++
 *   **底层 I/O**：Linux epoll, POSIX Threads, Pipes
 *   **Web 框架**：Crow
 *   **编解码后端**：FFmpeg
