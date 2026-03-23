@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # =============================================================================
-# Rakuraku Music Station - 自动化构建与部署脚本
+# Rakuraku Music Station - 构建脚本 v4.0
 # =============================================================================
 
-set -e  # 遇到错误立即退出
+set -e
 
 # 颜色定义
 RED='\033[0;31m'
@@ -15,54 +15,111 @@ PURPLE='\033[0;35m'
 NC='\033[0m' 
 
 echo -e "${BLUE}====================================================${NC}"
-echo -e "${BLUE}   Rakuraku Music Station Release Builder v2.0      ${NC}"
+echo -e "${BLUE}   Rakuraku Music Station - FFmpeg       ${NC}"
 echo -e "${BLUE}====================================================${NC}\n"
 
-# 1. 环境依赖深度检查
-echo -e "${YELLOW}[1/6] 检查系统依赖...${NC}"
+# 1. 基础环境检查
+echo -e "${YELLOW}[1/6] 检查基础编译环境...${NC}"
+sudo apt-get update -y
+sudo apt-get install -y build-essential libssl-dev locales strip wget curl xz-utils
 
-check_cmd() {
-    if ! command -v $1 &> /dev/null; then
-        echo -e "${RED}✗ 错误: 未安装 $1${NC}"
-        return 1
+# 2. FFmpeg
+echo -e "\n${YELLOW}[2/6] 配置全量版 FFmpeg...${NC}"
+
+# 函数：检查 FFmpeg 是否具备 MP3 和 AAC 编码能力
+check_ffmpeg_full() {
+    if command -v ffmpeg &> /dev/null; then
+        local has_mp3=$(ffmpeg -encoders | grep libmp3lame || true)
+        local has_aac=$(ffmpeg -encoders | grep libfdk_aac || ffmpeg -encoders | grep aac || true)
+        if [[ -n "$has_mp3" && -n "$has_aac" ]]; then
+            return 0 # 你通关！
+        fi
     fi
-    echo -e "${GREEN}✓ 已检测到 $1${NC}"
-    return 0
+    return 1 # 不过呐……
 }
 
-check_cmd g++ || { echo "请执行: sudo apt install build-essential"; exit 1; }
-check_cmd ffmpeg || { echo "请执行: sudo apt install ffmpeg"; exit 1; }
-
-# 检查 Locale 环境 (防止你的 zh_CN 代码崩溃)
-if ! locale -a | grep -qi "zh_CN.utf8"; then
-    echo -e "${PURPLE}! 提醒: 系统未发现 zh_CN.UTF-8，程序运行时可能报错。${NC}"
-    echo -e "  建议执行: sudo locale-gen zh_CN.UTF-8 && sudo update-locale"
+if check_ffmpeg_full; then
+    echo -e "${GREEN}✓ 当前系统 FFmpeg 已具备编码能力${NC}"
+else
+    echo -e "${PURPLE}当前 FFmpeg 可能是精简版，正在尝试升级为标准版...${NC}"
+    
+    # 尝试 1: 安装扩展包
+    sudo apt-get install -y ffmpeg libavcodec-extra || true
+    
+    # 尝试 2: 如果还是不行，下载官方静态 Full Build (John Van Sickle)
+    if ! check_ffmpeg_full; then
+        echo -e "${YELLOW}警告: 系统仓库版本不足。正在下载官方包 ...${NC}"
+        ARCH=$(uname -m)
+        if [ "$ARCH" == "x86_64" ]; then
+            FFMPEG_URL="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
+        else
+            FFMPEG_URL="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz"
+        fi
+        
+        wget -N $FFMPEG_URL
+        mkdir -p ffmpeg_full
+        tar -xJf ffmpeg-release-*-static.tar.xz -C ffmpeg_full --strip-components=1
+        
+        # 移动到 /usr/local/bin 或当前目录备用
+        sudo cp ffmpeg_full/ffmpeg /usr/local/bin/ffmpeg
+        sudo cp ffmpeg_full/ffprobe /usr/local/bin/ffprobe
+        chmod +x /usr/local/bin/ffmpeg
+        echo -e "${GREEN}✓ FFmpeg 已部署至 /usr/local/bin${NC}"
+    fi
 fi
 
-# 2. 清理与准备
-echo -e "\n${YELLOW}[2/6] 准备工作目录...${NC}"
-BUILD_DIR="build_tmp"
+# 3. 中文环境补全 (解决文件名解析 revents=16 问题)
+echo -e "\n${YELLOW}[3/6] 配置中文路径支持...${NC}"
+sudo locale-gen zh_CN.UTF-8 || true
+export LANG=zh_CN.UTF-8
+
+# 4. 编译
+echo -e "\n${YELLOW}[4/6] 编译服务器核心...${NC}"
 RELEASE_DIR="dist"
+rm -rf $RELEASE_DIR && mkdir -p $RELEASE_DIR/media
 
-rm -rf $BUILD_DIR $RELEASE_DIR
-mkdir -p $BUILD_DIR
-mkdir -p $RELEASE_DIR/media  # 存放音乐
-echo -e "${GREEN}✓ 目录已重置${NC}"
-
-# 3. 极致性能编译 (Release 模式)
-echo -e "\n${YELLOW}[3/6] 开始极致优化编译 (O3 + LTO)...${NC}"
-
-# 参数说明:
-# -O3: 最高级优化
-# -flto: 链接时优化，能跨文件优化二进制流
-# -s: 移除符号表
-# -DNDEBUG: 禁用断言
-# -march=native: 针对当前CPU生成指令(若需跨机分发请移除此项)
 g++ radioserver.cpp -o $RELEASE_DIR/radioserver \
-    -std=c++17 \
-    -O3 -flto -DNDEBUG \
-    -lpthread -lssl -lcrypto \
-    -I. -w
+    -std=c++17 -O3 -flto -lpthread -lssl -lcrypto -I. -w
+
+if [ -f "$RELEASE_DIR/radioserver" ]; then
+    strip $RELEASE_DIR/radioserver
+    echo -e "${GREEN}✓ 编译成功${NC}"
+else
+    echo -e "${RED}✗ 编译失败${NC}"
+    exit 1
+fi
+
+# 5. 生成生产环境管理脚本
+echo -e "\n${YELLOW}[5/6] 写入管理脚本...${NC}"
+
+cat <<'EOF' > $RELEASE_DIR/start.sh
+#!/bin/bash
+# 强制开启 UTF-8 环境
+export LANG=zh_CN.UTF-8
+export LC_ALL=zh_CN.UTF-8
+
+# 确保 FFmpeg 路径正确（优先使用刚安装的全量版）
+export PATH=/usr/local/bin:$PATH
+
+mkdir -p media
+echo "Rakuraku Music Station 正在启动..."
+echo "检测 FFmpeg 版本:"
+ffmpeg -version | head -n 1
+
+nohup ./radioserver > server.log 2>&1 &
+echo $! > .server.pid
+echo "服务已运行 (PID: $(cat .server.pid))，Web: http://localhost:2240"
+EOF
+
+chmod +x $RELEASE_DIR/start.sh
+
+# 6. 发布总结
+echo -e "\n${BLUE}====================================================${NC}"
+echo -e "${GREEN}        构建成功！FFmpeg 环境已就绪          ${NC}"
+echo -e "${BLUE}====================================================${NC}"
+echo -e "${YELLOW}当前 FFmpeg 路径:${NC} $(which ffmpeg)"
+echo -e "${YELLOW}支持的 MP3 编码器:${NC} $(ffmpeg -encoders | grep libmp3lame)"
+echo -e "${BLUE}====================================================${NC}\n"
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ 核心程序编译成功${NC}"
