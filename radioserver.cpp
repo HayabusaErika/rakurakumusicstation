@@ -26,6 +26,9 @@
 #include <iomanip>
 #include <regex>
 #include <random>
+#include <fstream>
+#include <sstream>
+
 
 namespace fs = std::filesystem;
 
