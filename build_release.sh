@@ -24,13 +24,13 @@ if [ -f /etc/arch-release ]; then
     OS="Arch"
     PKG_MGR="pacman"
     INSTALL_CMD="sudo pacman -S --needed --noconfirm"
-    DEPS="base-devel ffmpeg openssl boost cmake wget locales"
+    DEPS="base-devel ffmpeg openssl boost cmake wget locales asio"
     echo -e "${GREEN}检测到系统类型: Arch Linux${NC}"
 elif [ -f /etc/debian_version ] || [ -f /etc/lsb-release ]; then
     OS="Debian"
     PKG_MGR="apt"
     INSTALL_CMD="sudo apt-get install -y"
-    DEPS="build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev locales wget"
+    DEPS="build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev locales wget libasio-dev"
     echo -e "${GREEN}检测到系统类型: Debian/Ubuntu/WSL${NC}"
 else
     echo -e "${RED}抱歉，暂不支持此发行版。脚本仅支持 Arch 或 Debian/Ubuntu 系列。${NC}"
