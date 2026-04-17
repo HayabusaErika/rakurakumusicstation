@@ -202,6 +202,8 @@ g++ radioserver.cpp -o radioserver -std=c++17 -g -O0 -lpthread -lssl -lcrypto -I
 - [Crow C++](https://github.com/CrowCpp/Crow) - 轻量级 Web 框架
 - [FFmpeg](https://ffmpeg.org/) - 强大的多媒体处理库
 - [Boost C++ Libraries](https://www.boost.org/) - C++ 扩展库
+- [Cynun] - 你不知道她是谁，她也许只想呆在这里。但是如果没有她，这个项目不可能存在
+- [知夏] - 如果没有ta，这个项目走不到今天。祝他身体健康。
 
 ---
 
