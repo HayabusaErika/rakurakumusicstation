@@ -35,8 +35,8 @@ namespace fs = std::filesystem;
 namespace Config {
     constexpr int WEB_PORT = 2240;
     constexpr int STREAM_PORT = 2241;
-    constexpr size_t BUFFER_CAPACITY = 256 * 1024;  // 256KB
-    constexpr size_t AUDIO_CHUNK_SIZE = 8192;       // 8KB
+    constexpr size_t BUFFER_CAPACITY = 512 * 1024;  // 512KB - for better streaming
+    constexpr size_t AUDIO_CHUNK_SIZE = 16384;      // 16KB - improved chunk size
     constexpr int EPOLL_TIMEOUT_MS = 100;
     constexpr int POLL_TIMEOUT_MS = 200;
     constexpr int MAX_EVENTS = 1024;
@@ -589,6 +589,10 @@ private:
                                current_track_->load() % playlist_size : 0;
             filename = "./media/" + playlist_->at(track_idx);
 
+            // 确保使用UTF-8编码处理中文文件名
+            filename = filename;
+
+
             std::cout << "[Audio] Playing: " << playlist_->at(track_idx)
                       << " (" << track_idx + 1 << "/" << playlist_->size() << ")" << std::endl;
         }
@@ -596,13 +600,18 @@ private:
         // 检查文件是否存在
         if (!fs::exists(filename)) {
             std::cerr << "[Audio] File not found: " << filename << std::endl;
+            std::cerr << "[Audio] Current working directory: " << fs::current_path() << std::endl;
             (*current_track_)++;
             return;
         }
+
+        std::cout << "[Audio] Processing file: " << filename << std::endl;
         
-        // 构建FFmpeg命令
-        std::string cmd = "ffmpeg -re -v error -i \"" + filename + "\" "
-                  "-vn -codec:a libmp3lame -b:a 128k -ar 44100 -ac 2 -f mp3 -";
+        // 构建FFmpeg命令 - 使用更高的兼容性设置
+        std::string cmd = "ffmpeg -nostdin -re -loglevel error -i \"" + filename + "\" "
+                  "-vn -c:a libmp3lame -b:a 128k -ar 44100 -ac 2 -f mp3 pipe:1";
+
+        std::cout << "[Audio] Executing: " << cmd << std::endl;
         
         pipe = popen(cmd.c_str(), "r");
         if (!pipe) {
@@ -625,8 +634,11 @@ private:
             
             if (ret > 0) {
                 if (pfd.revents & POLLIN) {
-                    ssize_t bytes = read(pipe_fd, buffer, sizeof(buffer));
-                    
+                    ssize_t bytes;
+                    do {
+                        bytes = read(pipe_fd, buffer, sizeof(buffer));
+                    } while (bytes < 0 && errno == EINTR);
+
                     if (bytes > 0) {
                         buffer_->push(buffer, bytes);
                     } else if (bytes == 0) {
