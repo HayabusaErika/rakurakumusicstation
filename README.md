@@ -29,6 +29,7 @@
 
 ### 1. 自动构建（推荐）
 
+### 第 2 步：一键构建
 ```bash
 # 运行构建脚本（自动处理依赖）
 ./build_release.sh
@@ -45,6 +46,7 @@ cp /path/to/your/music/*.mp3 ./media/
 
 ### 2. 手动构建
 
+### 第 4 步：启动服务器
 ```bash
 # 安装依赖（Ubuntu/Debian）
 sudo apt-get install build-essential ffmpeg libavcodec-extra libssl-dev libboost-all-dev wget
